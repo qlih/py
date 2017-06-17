@@ -5,54 +5,68 @@
 # hnb的格式：UTF-8编码，第一个不是#开头的行是标题，以后每一个 # 开头的行都是一个子标题。
 
 # todo:
-#   命令行匹配
-#   * 匹配
-#   行排序，没用！(用参数解决）因为不方便查找，只有在编辑笔记，合并、分解标题时有用。
 #   预设多个默认的工作目录，可以放在hnbtl.cfg里面
 #   挂载到 hnb.*.txt 的菜单中。似乎是 菜单 的 Services
 
-import re
-import time
 import glob
+import math
 import os
+import re
+import sys
+import time
 
-def hnb_tl(hnb="hnb.*.txt"):
+_ver = 'Ver 0.3'
+
+def hnb_tl(hnb="hnb.*.txt"): # 大小写敏感
     for fr in glob.glob(hnb):
-        if re.search('.tl.txt', fr):
+        if re.search('\.tl\.txt', fr, re.I): #忽略 *.tl.txt *.TL.TXT
             continue
 
         (filepath,tempfilename) = os.path.split(fr);
         (shotname,extension) = os.path.splitext(tempfilename);
-        fw=shotname+'.tl'+extension
+        fw=os.path.join(filepath, shotname+'.tl'+extension)
         #try
         fls=[]
         f=open(fr,"r")
-        fls = f.readlines()
+        fls = f.readlines() # 文件一般都不大，全都读入内存。
         f.close()
 
         f=open(fw,"w")
 
-        i = 0
-        cn = ""
-
         # hf head-flag
         hf = 0
-
+        res={}
         number = 0
-        while i<len(fls):
+        for i in range(len(fls)):
             ltmp = fls[i].strip()
+            # 可以用两个for循环，分别处理文件头和文件
             if hf==0 and re.search('^[^#]',ltmp) != None: # find Title,第一个不是#开头的行
                 hf=1
-                f.write(ltmp)
-                f.write("\n版本: "+time.strftime('%Y-%m-%d',time.localtime(time.time()))+"\n\n")
+                f.write(ltmp) # Big Title
+                stinfo = os.stat(fr)
+                f.write(os.linesep+time.ctime(stinfo.st_atime))
                 continue
-            cn, number = re.subn('^#[ \t]*(.*)', '# \g<1>', ltmp, 0)
+            title, number = re.subn('^#[\s]*(.*)', '\g<1>', ltmp, 0)
             if number>0:
-                f.write(cn+"\n")
-            i = i+1
+                if title in res:
+                    res[title] = '{}({})'.format(res[title],i+1)
+                else:
+                    res[title]=i+1
 
+        # format programming show: 行宽 = 以10为底的对数
+        ln_width=round(math.log(i,10))
+        ln_cap=('LN# '+'%%0%dd'%(ln_width)+' # Title')%(0)
+        ln_tem='{:>%d} # {}'%(ln_width+4)
+
+        f.write(os.linesep+os.linesep+ln_cap+os.linesep+os.linesep)
+        for title in sorted(res.keys()): # 输出按照标题排序
+            f.write(ln_tem.format(res[title], title) + os.linesep)
 
         f.close()
+        # 加上 readonly
 
 if __name__ == '__main__':
-    hnb_tl()
+    if len(sys.argv)>1:
+        hnb_tl(sys.argv[1])
+    else:
+        hnb_tl()
