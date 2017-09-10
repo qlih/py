@@ -6,6 +6,9 @@
 #   hnb的格式：UTF-8编码，第一个不是#开头的行是标题，以后每一个 # 开头的行都是一个子标题。
 #   记录一下log，即到底有多少个 hnb 文件，
 
+__author__ = 'qlih@qq.com'
+__version__  = '0.32'
+
 import glob
 import math
 import os
@@ -13,15 +16,12 @@ import re
 import sys
 import time
 
-__author__ = 'qlih@qq.com'
-__version__  = '0.31'
-
 def get_paths(lpath="./"):  # ~/etc, /usr/local/etc, /var, ./
     cfgs =[]
     res =[]
     try:    # with
         f = open(os.path.join(lpath,'hnbtl.cfg') ,'r')
-        cfgs=f.readlines()
+        cfgs=f.readlines()  #r 如果GB2312代码会出解码错。
         f.close()
     except Exception as e:
         res.append('./')    # 如果发生问题，就处理当前目录下的文件。这个设置是配置文件仅仅配置在程序目录下的一种逻辑，只有这样才能避免去执行太多的配置命令。
@@ -34,7 +34,7 @@ def get_paths(lpath="./"):  # ~/etc, /usr/local/etc, /var, ./
 
     for ltmp in cfgs:
         ltmp = ltmp.strip() # 处理~
-        if re.search('^#.*', ltmp):
+        if re.search('^#.*', ltmp): # 标题行
             continue
         if re.search('[/\\\]+', ltmp): # 需要有路径字符
                     # re.sub() todo 删除行中的注释
@@ -116,6 +116,7 @@ def hnb_tl(hnb="hnb.*.txt"): # 大小写敏感
 
 
 if __name__ == '__main__':
+
     i =len(sys.argv)
     # print(len(sys.argv)) # shell 会把 *.* 里面的文件名都展开。
     if i>1: # 如果有参数，要从第一个文件开始计算，或者先装入一个列表。

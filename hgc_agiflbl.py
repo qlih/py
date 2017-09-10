@@ -10,6 +10,9 @@ import re
 import os
 import sys
 
+__author__ = 'qlih@qq.com'
+__version__  = '0.1'
+
 def count_lbl(filename="*.*"):
     agts={} # 用于保存标签的dict
     for index,fr in enumerate(glob.glob(filename)):
