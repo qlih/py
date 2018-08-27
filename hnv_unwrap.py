@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # Encoding:UTF-8
 """
-	hnv_unwrap.py
-	算法描述：
-	utf-8格式读入
-		测量长度，一般字符算1，CJK算2，各行的长度都统计后，排序。相对多字符（比如多余56个ascii），最长的行，如果不多，则可以忽略，看某一个宽度，如70字宽的行是不是很多。
-		如果确定是 wrap 的格式，则
-			干掉折行，不论结尾的地方是否有标点；
+    hnv_unwrap.py
+    算法描述：
+    utf-8格式读入
+        测量长度，一般字符算1，CJK算2，各行的长度都统计后，排序。相对多字符（比如多余56个ascii），最长的行，如果不多，则可以忽略，看某一个宽度，如70字宽的行是不是很多。
+        如果确定是 wrap 的格式，则
+            干掉折行，不论结尾的地方是否有标点；
 """
 __author__ = 'qlih@qq.com'
 __version__ = '0.05'
@@ -94,8 +94,7 @@ class textUnWrap():
         pass
 
     def __init__ (self, filename='demo_wrap.txt', codeType='utf-8'):
-        print(filename)
-        print(codeType)
+        print('('+ codeType +')'+ filename)
 
         self.__lines=[] # 读入的原始文件
         self.__textFileName=''
@@ -122,11 +121,10 @@ class textUnWrap():
     def close(self):
         # write to file.
         f=open(self.__outDir+self.__textFileName,'w')  #默认存盘的字符编码是utf8，mac下测试。
-        for lc in self.__txt:
+        for lc in self.__lines:
             f.write(lc)
         f.close()
-        #print(self.__txt)
-        # 改写 log
+
 
     # .basic() 方法需要人工识别。
     def basic(self):
@@ -167,9 +165,11 @@ class textUnWrap():
         # 最后一行。
         self.__txt.append(_tmpLine)
 
-    def reset(self):
+        # 修复缓冲区
+        self.__lines = self.__txt
         self.__txt = []
 
+    def reset(self):
         pass
 
     '''
@@ -212,7 +212,7 @@ class textUnWrap():
     SBC case 全角
     DBC case 半角
     全角-半角 == 0xfee0
-    Alpha: A, \uFF21, \u0041 - Z, \uFF3A, \u005A
+    Alpha: Ａ, \uFF21 -> \u0041  Z, \uFF3A -> \u005A
     Alpha: a, \uFF41, \u0061 - z, \uFF5A, \u007A
     Digital: 0, \uFF10,\u0030 - 9 , \uFF19, \u0039
     '''
@@ -221,20 +221,30 @@ class textUnWrap():
         found = False
         for uchar in uString:
             uCode=ord(uchar)
-            if (uCode>0xff21 and uCode<0xff3a) or (uCode>0xff41 and uCode<0xff5a) or (uCode>0xff10 and uCode<0xff19):
+            if (uCode>=0xff21 and uCode<=0xff3a) or (uCode>=0xff41 and uCode<=0xff5a) or (uCode>=0xff10 and uCode<=0xff19):
                 ret +=chr(uCode-0xfee0)
                 found = True
             else:
                 ret += uchar
 
-            return (ret, found)
+        return (ret, found)
 
     def AlphaDigital(self):
         printLog = True
+        ret = ""
+
         for lc in self.__lines:
             ret,found = self.SBC2DBC_AlphaDigital(lc)
-            if printLog and found:
-                print (lc+'\n'+ret+'\n')
+#            if printLog and found:
+#                print (lc+'\n'+ret+'\n')
+            self.__txt.append(ret)
+
+        # 修复缓冲区
+        self.__lines = self.__txt
+        self.__txt = []
+
+        pass
+
 
     def advance(self):  # 计算每行的长度。
         # 1 用 muilti_line模式，搜索 标题、独立行……替换成特色【】包含符号。
@@ -250,8 +260,7 @@ class textUnWrap():
         pass
 
 
-import chardet
-#import codecs
+import chardet  # pip3 install chardet
 
 if __name__ == '__main__':
     i =len(sys.argv)
@@ -260,7 +269,7 @@ if __name__ == '__main__':
         while i>1:  # 参数是'*.*'时，shell会自动展开*.*，所以用循环。
             finput = open(sys.argv[i-1], 'rb')
             codeType = chardet.detect(finput.read(1024))["encoding"]    #检测编码方式，读4K就可以了。也许1024
-            print ('编码是 ', codeType)
+            # print ('编码是 ', codeType)
             finput.close()
 
             unwrap = textUnWrap(sys.argv[i-1],codeType)
@@ -270,3 +279,16 @@ if __name__ == '__main__':
             i=i-1
     else:
         print('Usage example: unwrap.py *.txt')
+
+"""
+1 换行错: r'(　　[　]+.*)' -> \n($1)
+　　内心挣扎已很久了。
+　　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊
+　　同玛莎和其馀的人都见过面。心中已有了一个惊人的概括了解。
+--> 分隔符的问题
+　　内心挣扎已很久了。　　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊
+　　同玛莎和其馀的人都见过面。心中已有了一个惊人的概括了解。
+2 标题识别
+　　　　　　　　　　　　　　　（一）
+3
+"""
