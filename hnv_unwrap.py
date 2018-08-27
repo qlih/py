@@ -9,7 +9,7 @@
             干掉折行，不论结尾的地方是否有标点；
 """
 __author__ = 'qlih@qq.com'
-__version__ = '0.05'
+__version__ = '0.06'
 
 import re
 import os
@@ -120,7 +120,9 @@ class textUnWrap():
 
     def close(self):
         # write to file.
-        f=open(self.__outDir+self.__textFileName,'w')  #默认存盘的字符编码是utf8，mac下测试。
+        fout, found = self.SBC2DBC_AlphaDigital(self.__textFileName)
+        # 文件名要转换全角到半角。
+        f=open(self.__outDir+fout,'w')  #默认存盘的字符编码是utf8，mac下测试。
         for lc in self.__lines:
             f.write(lc)
         f.close()
@@ -133,12 +135,17 @@ class textUnWrap():
         """
         # 这里要设置一个例子，说明到底能处理哪种状况。
 
-        _tmpLine=''     # 自然段，缓存。
+        _tmpLine=''     # 自然段，缓存。也叫半行缓存。
         _newLine = False
 
         for lc in self.__lines:
             # 每一行的缓存，可以去读区规则区的规则，轮番适配一下。
-            if re.search('^　　[^　 ]',lc, re.I):  # \u#3000
+            if re.search('^　　[　 ]+[第（0-9]',lc, re.I): # 找标题行
+                # 暂时不处理
+                self.__txt.append(lc)
+            elif re.search('^　[　 ]+[※❉＊]+.*',lc, re.I): # （独立的）分割行
+                self.__txt.append('　　❉　❉　❉　❉　❉　❉'+os.linesep)
+            elif re.search('^　　[^　 ]',lc, re.I):  # \u#3000
                         # 应该 增加一个 四半角空格 的选项。
                 if _newLine:    # 两个紧邻的自然段。等于要换行（新段落）了。
                     _tmpLine=_tmpLine+os.linesep
@@ -229,6 +236,7 @@ class textUnWrap():
 
         return (ret, found)
 
+
     def AlphaDigital(self):
         printLog = True
         ret = ""
@@ -281,14 +289,16 @@ if __name__ == '__main__':
         print('Usage example: unwrap.py *.txt')
 
 """
-1 换行错: r'(　　[　]+.*)' -> \n($1)
-　　内心挣扎已很久了。
-　　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊
-　　同玛莎和其馀的人都见过面。心中已有了一个惊人的概括了解。
---> 分隔符的问题
-　　内心挣扎已很久了。　　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊
-　　同玛莎和其馀的人都见过面。心中已有了一个惊人的概括了解。
+1 ＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊
+--->不处理
 2 标题识别
 　　　　　　　　　　　　　　　（一）
-3
+　　1、这种不是
+3 结束
+    （完）| 【全书完】【完】
+---> \n■
+4 长句末尾没有标点，不是分割线的，警告。
+5 全角转半角
+    － 是不是转 - ？
+6 输出目录需要改
 """
