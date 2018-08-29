@@ -9,7 +9,7 @@
             干掉折行，不论结尾的地方是否有标点；
 """
 __author__ = 'qlih@qq.com'
-__version__ = '0.06'
+__version__ = '0.07'
 
 import re
 import os
@@ -38,6 +38,9 @@ class detect():
         只有中文双引号
         作者注视符号：ps/㊟
         时间地点分割行，四组：5/3 4/3 4/3 4/3= '　　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊　　　　＊＊＊'
+    classic:
+        章节数字标准化，上中下等先放放。
+
 '''
 class labelDefine():
     blankLine=False #行与行之间，用空行分割时 = true
@@ -132,45 +135,111 @@ class textUnWrap():
     def basic(self):
         """
         最简单的情况：“两个全角空格开始”……直到下一个“两个全角空格开始”的行，中间的换行全删掉。
+            第一行：Title
+            第二行：空行 或者 作者、日期等
+            第三行：空行
+            第四行：正文，或者“第一个章节”，章节=^第[\\d]章：Text\n
+            第五行：如果前文是章节，这里是空行
+            第六行：本章节正文结束。此处可以结束文件。
+            第七行：重复：第三行，或者 空行
+            第八行：如果没有章节，最后一个标志是‘■’
+        用换行分割自然段，自然段开头不留空格顶头的，是另一种模式。
         """
         # 这里要设置一个例子，说明到底能处理哪种状况。
 
         _tmpLine=''     # 自然段，缓存。也叫半行缓存。
         _newLine = False
 
+        last_linetmp ='' # 最后一行，非空，用于判断文件末尾。
+        split_str = '　　❉❉　　❉❉　　❉❉'+os.linesep
+            #    '　　❉　❉　❉　❉　❉　❉' = '^[　]+(　❉)+'
+            #    '　　❉❉　　❉❉　　❉❉' = '^(　　❉❉)+'
+            #    '►▬▬◄'
+
+            # '　　***', '　　…………', '　　……' 
+
         for lc in self.__lines:
             # 每一行的缓存，可以去读区规则区的规则，轮番适配一下。
-            if re.search('^　　[　 ]+[第（0-9]',lc, re.I): # 找标题行
-                # 暂时不处理
+            if re.search('^＊＊＊＊＊＊＊＊＊[＊]+',lc,re.I):
                 self.__txt.append(lc)
+            if re.search('^　　[　 ]+[第（0-9]',lc, re.I): # 找引导空格很多的标题行
+                self.__txt.append(lc.strip()+os.linesep) # 直接处理成顶头的。
             elif re.search('^　[　 ]+[※❉＊]+.*',lc, re.I): # （独立的）分割行
-                self.__txt.append('　　❉　❉　❉　❉　❉　❉'+os.linesep)
-            elif re.search('^　　[^　 ]',lc, re.I):  # \u#3000
+                # 用‘*’分割的可能是敏感词，需要孤立存在。即“    ****\n”这种。
+                self.__txt.append(split_str)    # 直接替换
+            elif lc.strip() == '':    # basic版：空行，就是自然段结束。lc==os.linesep or lc.strip() == ''
+                # todo: 空行的戏一行可能是顶格的“小标题”，也可能是一个折行的东西
+                # 判断标题需要用 ^第[0-9]+章节折，字符串不够长，一般没有结束标点。
+                # 或者先用章节目录工具处理一下？
+                if _newLine:
+
+                    self.__txt.append(_tmpLine+os.linesep) # 结束一个自然段。当前的换行没处理。
+                    # _tmpLine='' # 和下文的重复了，可以删除这行。
+                    _newLine=False
+
+                _tmpLine=''
+                self.__txt.append(os.linesep)
+            elif re.search('^　　[^　 ]+',lc, re.I) or re.search('^    [^　 ]+',lc, re.I):  # \u#3000
                         # 应该 增加一个 四半角空格 的选项。
                 if _newLine:    # 两个紧邻的自然段。等于要换行（新段落）了。
                     _tmpLine=_tmpLine+os.linesep
 
                 self.__txt.append(_tmpLine)
 
-                _tmpLine='　　'+lc.strip()    # '\u3000\u3000'
-                _newLine=True
-            elif lc==os.linesep:    # basic版：空行，就是自然段结束。
-                if _newLine:
-                    _tmpLine=_tmpLine+os.linesep
-                    _newLine=False
-
-                    # 改进：每一行都要单独的append一次。这样的self.__txt是。readlines()的格式。
-
-                _tmpLine=_tmpLine+os.linesep
-                self.__txt.append(_tmpLine)
-                _tmpLine=''
+                _tmpLine='　　'+lc.strip()    # '\u3000\u3000' 行未没有换行。
+                _newLine=True   # 确定发现了新自然段。
+                # 补丁：修补单独空格的行。
             else:
                 if _newLine:    # 自然段的非首行。
-                    _tmpLine=_tmpLine+lc.rstrip()
-                else:   # 不是自然段内，不处理。
-                    _tmpLine=_tmpLine+lc
-        # 最后一行。
-        self.__txt.append(_tmpLine)
+                    _tmpLine=_tmpLine+lc.strip() # lc.rstrip() 删掉了行尾的空白和换行。
+                else:   # 不是自然段内的顶头行，不处理。（一般是标题）
+                    # _tmpLine=_tmpLine+lc # 保留了换行。
+                    self.__txt.append(lc.strip()+os.linesep) # 结束一个自然段。当前的换行没处理。
+                    _tmpLine = ''   # 没有记录前后文，不知道需不需要记录。记录的好处是可以再加工如“标题”、”分隔符“等扩展内容。
+        # 最后一行。最后一行的末尾可能有连续换行。删掉也没什么。
+        self.__txt.append(_tmpLine.rstrip()) # 最后一行没有换行符号
+
+        # -----------------------------------
+        # 最后一行的“完”签字，倒数查询。
+        found =False # 没找到最后一行。
+        for i in range(len(self.__txt)-1, -1, -1):
+            if self.__txt[i].strip() == '':
+                # print(str(i) + 'deleted!')
+                del self.__txt[i]    # 删除文件末尾的空行，遇到‘■’时，删除之前的空行，然后后面再加回来。
+            else:
+                # print(len(self.__txt[i].strip()))
+                if found:   # 已经找到最后一行了。
+                #    如果删除多了，比如“正文\n\n\n\nPS：正文（完）“,
+                #    就会把中间的换行删掉了。
+                    break   # 发现了不是末尾的一行，中止
+                else:
+                    last_linetmp = self.__txt[i]
+                    # print('\t' + str(i) + '\n'+last_linetmp)
+                    del self.__txt[i]    # 最后一行待处理，移除。
+                    found = True # 找到最后一行后，继续循环，把前面的多余空行删除
+        
+        '''
+        最后一行的规则：
+            （完）| 【全书完】【完】（排除 未完待续）
+            ‘■’后面没有换行，如果没有“完”，就要给一个换行。
+        '''
+
+        # 区分行内（完）还是独立行（完）
+        _tmpEnd = '[　 \\t]*[\\w（\\(【^未]+完+[】\\)）]$'    # ■也可能在末尾？
+        last_linetmp = last_linetmp.rstrip()
+        if last_linetmp == '■':
+            self.__txt.append(os.linesep)   # 回填一个空行
+        elif re.search('^'+_tmpEnd,last_linetmp, re.I):
+            last_linetmp = '\n■'  # 直接替换
+            print('\tfound:^【完】')
+        elif re.search(_tmpEnd,last_linetmp, re.I):
+            # 行尾替换
+            print('\tfound:【完】')
+            last_linetmp = re.sub(_tmpEnd, '\n\n■', last_linetmp)
+        else:
+            pass
+
+        self.__txt.append(last_linetmp.rstrip())        # 加回最后一行，删掉多余的换行。
 
         # 修复缓冲区
         self.__lines = self.__txt
@@ -294,11 +363,24 @@ if __name__ == '__main__':
 2 标题识别
 　　　　　　　　　　　　　　　（一）
 　　1、这种不是
+    2、章节没有断行！
+    loop1
+    ^(第[一二三四五六七八九十]+章)(.*) -->$1$2\n，然后另一个文件改章节号？
+    loop2，解决没有title的章节问题。
+    ^(第[一二三四五六七八九十]+章)([ 　]+)(.*)  -->$1：$3
+
 3 结束
-    （完）| 【全书完】【完】
----> \n■
+    '  （...完）' 的识别还是问题很多。：'【完】'直接点名更准一些。'　　完。'，‘——结束’
+    sublime text 和 python 的正则不一样。需要一个python正则工具
+        待测试文本，期待文本，测试后结果，结果对比。
 4 长句末尾没有标点，不是分割线的，警告。
 5 全角转半角
     － 是不是转 - ？
 6 输出目录需要改
+7 文件名的标题要修订，带有“完”的需要改标题“-最后一章”，否则……
+    没有“完”，而且有“章节”的，就要在文件名上加1-?$，
+    有■的，有章节的加章节总数，如ABC-7.txt
+8 去垃圾
+    ‘[|]*派派.*\n’
+9 后记、附件、同人、番外，统统用■再分割。
 """
